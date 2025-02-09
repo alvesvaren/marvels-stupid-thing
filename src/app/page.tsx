@@ -143,7 +143,9 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
   const [newUsername, setNewUsername] = useState(username);
   const queryClient = useQueryClient();
 
-  const currentPlayers = queryClient.getQueryData<PlayerMapping>(["currentPlayers"]) || {};
+  const { data: currentPlayers = {} } = useQuery<PlayerMapping>({
+    queryKey: ["currentPlayers"]
+  });
 
   const searchMutation = useMutation({
     mutationFn: async (username: string) => {
@@ -163,6 +165,7 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
         ...currentPlayers,
         [username]: id,
       });
+      queryClient.invalidateQueries({ queryKey: ["currentPlayers"] });
       setPlayerId(id);
       setNewUsername(username);
       setIsEditOpen(false);
