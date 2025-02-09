@@ -198,18 +198,23 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
                 <DialogTitle>Update Username</DialogTitle>
                 <DialogDescription>Enter the correct username to search for the player.</DialogDescription>
               </DialogHeader>
-              <div className='py-4'>
-                <Label htmlFor='username'>Username</Label>
-                <Input id='username' value={newUsername} onChange={e => setNewUsername(e.target.value)} className='mt-2' />
-              </div>
-              <DialogFooter>
-                <Button variant='outline' onClick={() => setIsEditOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => searchMutation.mutate(newUsername)} disabled={searchMutation.isPending}>
-                  {searchMutation.isPending ? "Searching..." : "Search"}
-                </Button>
-              </DialogFooter>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                searchMutation.mutate(newUsername);
+              }}>
+                <div className='py-4'>
+                  <Label htmlFor='username'>Username</Label>
+                  <Input id='username' value={newUsername} onChange={e => setNewUsername(e.target.value)} className='mt-2' />
+                </div>
+                <DialogFooter>
+                  <Button type='button' variant='outline' onClick={() => setIsEditOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type='submit' disabled={searchMutation.isPending}>
+                    {searchMutation.isPending ? "Searching..." : "Search"}
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </CardContent>
@@ -414,6 +419,15 @@ function AppContent() {
     processImageMutation.mutate(file);
   };
 
+  const playerGroups = Object.entries(players).reduce<Array<[string, string | null][]>>((acc, entry, i) => {
+    const groupIndex = Math.floor(i / 6);
+    if (!acc[groupIndex]) {
+      acc[groupIndex] = [];
+    }
+    acc[groupIndex].push(entry);
+    return acc;
+  }, []);
+
   return (
     <div className='min-h-screen p-8'>
       <main className='max-w-7xl mx-auto space-y-8'>
@@ -469,17 +483,21 @@ function AppContent() {
               <CardTitle>Player Results</CardTitle>
               <CardDescription>Found {Object.keys(players).length} players in the screenshot</CardDescription>
             </CardHeader>
-            <CardContent className='grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
-              {Object.entries(players).map(([username, playerId]) => (
-                <ErrorBoundary
-                  key={username}
-                  FallbackComponent={PlayerCardErrorFallback}
-                  onReset={() => {
-                    queryClient.invalidateQueries({ queryKey: ["player", playerId] });
-                  }}
-                >
-                  <PlayerCard username={username} playerId={playerId} />
-                </ErrorBoundary>
+            <CardContent className='flex flex-col gap-8'>
+              {playerGroups.map((group, groupIndex) => (
+                <div key={groupIndex} className={`grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${groupIndex > 0 ? "pt-8 border-t" : ""}`}>
+                  {group.map(([username, playerId]) => (
+                    <ErrorBoundary
+                      key={username}
+                      FallbackComponent={PlayerCardErrorFallback}
+                      onReset={() => {
+                        queryClient.invalidateQueries({ queryKey: ["player", playerId] });
+                      }}
+                    >
+                      <PlayerCard username={username} playerId={playerId} />
+                    </ErrorBoundary>
+                  ))}
+                </div>
               ))}
             </CardContent>
           </Card>
