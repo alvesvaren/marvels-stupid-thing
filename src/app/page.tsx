@@ -274,64 +274,66 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     .sort((a, b) => b.matches - a.matches);
 
   return (
-    <Card>
-      <CardHeader className='pb-2'>
-        <CardTitle className='text-lg flex items-center justify-between'>
-          {newUsername}
-          <span className='text-sm font-normal'>{rankNames[lastRank.rank.new_level] ?? lastRank.rank.new_level}</span>
-        </CardTitle>
-        <CardDescription className='text-xs'>ID: {playerId}</CardDescription>
-      </CardHeader>
-      <CardContent className='space-y-4'>
-        <div className='gap-2 flex'>
-          <div className='flex-1'>
-            <div className='text-xs font-medium mb-1'>Overall WR</div>
-            <WinRateProgress wins={stats.total_wins} matches={stats.total_matches} />
-          </div>
-          <div className='flex-1'>
-            <div className='text-xs font-medium mb-1'>Ranked WR</div>
-            <WinRateProgress wins={stats.ranked_matches_wins} matches={stats.ranked_matches} />
-          </div>
-        </div>
-
-        {frequentTeammates.length > 0 && (
-          <Section title='Premade Teammates'>
-            <div className='col-span-3 grid grid-cols-2 gap-2'>
-              {frequentTeammates.map(teammate => (
-                <div key={teammate.info.player_uid} className='flex items-center justify-between bg-secondary/50 rounded p-2'>
-                  <span className='text-xs font-medium'>{teammate.info.nick_name}</span>
-                  <span className='text-xs text-muted-foreground'>({teammate.matches})</span>
-                </div>
-              ))}
+    <a href={`https://rivalsmeta.com/player/${playerId}`} target="_blank" rel="noopener noreferrer" className="block h-full transition-transform hover:scale-[1.02]">
+      <Card className="h-full">
+        <CardHeader className='pb-2'>
+          <CardTitle className='text-lg flex items-center justify-between'>
+            {newUsername}
+            <span className='text-sm font-normal'>{rankNames[lastRank.rank.new_level] ?? lastRank.rank.new_level}</span>
+          </CardTitle>
+          <CardDescription className='text-xs'>ID: {playerId}</CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <div className='gap-2 flex'>
+            <div className='flex-1'>
+              <div className='text-xs font-medium mb-1'>Overall WR</div>
+              <WinRateProgress wins={stats.total_wins} matches={stats.total_matches} />
             </div>
+            <div className='flex-1'>
+              <div className='text-xs font-medium mb-1'>Ranked WR</div>
+              <WinRateProgress wins={stats.ranked_matches_wins} matches={stats.ranked_matches} />
+            </div>
+          </div>
+
+          {frequentTeammates.length > 0 && (
+            <Section title='Premade Teammates'>
+              <div className='col-span-3 grid grid-cols-2 gap-2'>
+                {frequentTeammates.map(teammate => (
+                  <div key={teammate.info.player_uid} className='flex items-center justify-between bg-secondary/50 rounded p-2'>
+                    <span className='text-xs font-medium'>{teammate.info.nick_name}</span>
+                    <span className='text-xs text-muted-foreground'>({teammate.matches})</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <Section title='Most Played Heroes (ban if good)'>
+            {topHeroes.map(([heroId, heroStats]) => (
+              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} showKDA={true} />
+            ))}
           </Section>
-        )}
 
-        <Section title='Most Played Heroes (ban if good)'>
-          {topHeroes.map(([heroId, heroStats]) => (
-            <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} showKDA={true} />
-          ))}
-        </Section>
+          <Section title='Best Heroes (ban)'>
+            {bestHeroes.map(([heroId, heroStats]) => (
+              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} />
+            ))}
+          </Section>
 
-        <Section title='Best Heroes (ban)'>
-          {bestHeroes.map(([heroId, heroStats]) => (
-            <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} />
-          ))}
-        </Section>
+          <Section title='Best Matchups (avoid)'>
+            {topMatchups.map(matchup => (
+              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+            ))}
+          </Section>
 
-        <Section title='Best Matchups (avoid)'>
-          {topMatchups.map(matchup => (
-            <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
-          ))}
-        </Section>
-
-        <Section title='Worst Matchups (play)'>
-          {bottomMatchups.map(matchup => (
-            <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
-          ))}
-        </Section>
-      </CardContent>
-    </Card>
+          <Section title='Worst Matchups (play)'>
+            {bottomMatchups.map(matchup => (
+              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+            ))}
+          </Section>
+        </CardContent>
+      </Card>
+    </a>
   );
 }
 
@@ -485,7 +487,7 @@ function AppContent() {
             </CardHeader>
             <CardContent className='flex flex-col gap-8'>
               {playerGroups.map((group, groupIndex) => (
-                <div key={groupIndex} className={`grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 ${groupIndex > 0 ? "pt-8 border-t" : ""}`}>
+                <div key={groupIndex} className={`grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 items-stretch ${groupIndex > 0 ? "pt-8 border-t" : ""}`}>
                   {group.map(([username, playerId]) => (
                     <ErrorBoundary
                       key={username}
