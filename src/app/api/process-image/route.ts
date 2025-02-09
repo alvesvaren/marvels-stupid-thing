@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { zodResponseFormat } from 'openai/helpers/zod';
-import { searchPlayer } from '../search/route';
+import { searchPlayer } from '../search/funcs';
 
 const UsernamesSchema = z.object({
   usernames: z.array(z.string()),
