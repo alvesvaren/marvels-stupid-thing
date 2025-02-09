@@ -345,6 +345,28 @@ function AppContent() {
     }
   }, []);
 
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      if (!apiKey) {
+        setIsDialogOpen(true);
+        return;
+      }
+
+      const items = e.clipboardData?.items;
+      const imageItem = items && Array.from(items).find(item => item.type.startsWith('image'));
+
+      if (imageItem) {
+        const file = imageItem.getAsFile();
+        if (file) {
+          processImageMutation.mutate(file);
+        }
+      }
+    };
+
+    document.addEventListener('paste', handleGlobalPaste);
+    return () => document.removeEventListener('paste', handleGlobalPaste);
+  }, [apiKey]);
+
   const handleSaveApiKey = () => {
     localStorage.setItem("openai_api_key", tempApiKey);
     setApiKey(tempApiKey);
@@ -398,7 +420,7 @@ function AppContent() {
         <Card>
           <CardHeader>
             <CardTitle>Marvel Rivals Player Lookup</CardTitle>
-            <CardDescription>Upload a screenshot to find player details</CardDescription>
+            <CardDescription>Upload a screenshot or paste (Ctrl+V) anywhere on the page to find player details</CardDescription>
           </CardHeader>
           <CardContent className='space-y-4'>
             <div className='flex justify-between items-center'>
@@ -414,7 +436,22 @@ function AppContent() {
             </div>
             <div className='space-y-2'>
               <Label htmlFor='image'>Upload Screenshot</Label>
-              <Input type='file' id='image' accept='image/*' onChange={handleImageUpload} />
+              <div 
+                className='relative border rounded-md' 
+              >
+                <Input 
+                  type='file' 
+                  id='image' 
+                  accept='image/*' 
+                  onChange={handleImageUpload}
+                  className='relative z-10'
+                />
+                {!processImageMutation.isPending && (
+                  <div className='absolute inset-0 flex items-center justify-center text-muted-foreground pointer-events-none'>
+                    <span>Drop image here or click to upload</span>
+                  </div>
+                )}
+              </div>
             </div>
             {processImageMutation.isPending && (
               <div className='p-4 bg-secondary/50 text-secondary-foreground rounded-md flex items-center justify-center gap-2'>
