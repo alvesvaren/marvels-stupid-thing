@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { heroNames } from "@/data/hero-mappings";
-import { QueryClient, QueryClientProvider, useMutation, useQuery } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { heroNames, rankNames } from "@/data/mappings";
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useEffect, useState } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import { PlayerData } from "./api/player/[id]/route";
 
 interface PlayerMapping {
@@ -35,15 +35,14 @@ function getHeroName(heroId: string): string {
   return heroNames[heroId] || `Unknown (${heroId})`;
 }
 
-function WinRateProgress({ wins, matches, className = "" }: { wins: number; matches: number; className?: string }) {
-  const winRate = calculateWinRate(wins, matches);
+function WinRateProgress({ wins, matches, className = "", inverted = false }: { wins: number; matches: number; className?: string; inverted?: boolean }) {
+  const winRate = calculateWinRate(inverted ? matches - wins : wins, matches);
   const color = winRate >= 60 ? "bg-green-500" : winRate >= 50 ? "bg-blue-500" : "bg-red-500";
 
   return (
     <div className={`space-y-0.5 ${className}`}>
       <div className='flex justify-between text-xs'>
-          <span>{Math.round(winRate * 10) / 10}%</span>
-          ({matches})
+        <span>{Math.round(winRate * 10) / 10}%</span>({matches})
       </div>
       <div className='relative w-full h-1.5 bg-secondary rounded-full overflow-hidden'>
         <div className={`h-full transition-all ${color}`} style={{ width: `${Math.min(Math.round(winRate * 10) / 10, 100)}%` }} />
@@ -56,15 +55,17 @@ function HeroStats({
   name,
   stats,
   showKDA = false,
+  inverted = false,
 }: {
   name: string;
   stats: { matches: number; win: number; kills?: number; deaths?: number; assists?: number };
   showKDA?: boolean;
+  inverted?: boolean;
 }) {
   return (
     <div className='flex gap-1 flex-col justify-between'>
       <div className='font-medium text-xs'>{name}</div>
-      <WinRateProgress wins={stats.win} matches={stats.matches} />
+      <WinRateProgress wins={stats.win} matches={stats.matches} inverted={inverted} />
       {showKDA && stats.kills !== undefined && stats.deaths !== undefined && stats.assists !== undefined && (
         <div className='text-xs text-muted-foreground'>{calculateKDA(stats.kills, stats.deaths, stats.assists)}</div>
       )}
@@ -121,11 +122,27 @@ function ApiKeyDialog({
   );
 }
 
+function PlayerCardErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <Card>
+      <CardContent className='p-6'>
+        <div className='flex flex-col items-center gap-4'>
+          <div className='text-destructive'>Something went wrong loading the player card</div>
+          <div className='text-sm text-muted-foreground'>{error.message}</div>
+          <Button onClick={resetErrorBoundary}>Try again</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PlayerCard({ username, playerId: initialPlayerId }: { username: string; playerId: string | null }) {
   const [playerId, setPlayerId] = useState<string | null>(initialPlayerId);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [newUsername, setNewUsername] = useState(username);
-  const [isSearching, setIsSearching] = useState(false);
+  const queryClient = useQueryClient();
+
+  const currentPlayers = queryClient.getQueryData<PlayerMapping>(["currentPlayers"]) || {};
 
   const searchMutation = useMutation({
     mutationFn: async (username: string) => {
@@ -143,6 +160,10 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     onSuccess: newId => {
       setPlayerId(newId);
       setIsEditOpen(false);
+      queryClient.setQueryData(["currentPlayers"], {
+        ...currentPlayers,
+        [newUsername]: newId,
+      });
     },
   });
 
@@ -223,6 +244,7 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     rank_history: [lastRank],
     heroes_ranked,
     matchups,
+    teammates,
   } = playerDetails;
 
   const topHeroes = Object.entries(heroes_ranked)
@@ -234,16 +256,24 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     .sort((a, b) => calculateWinRate(b[1].win, b[1].matches) - calculateWinRate(a[1].win, a[1].matches))
     .slice(0, 3);
 
-  const topMatchups = [...matchups].sort((a, b) => calculateWinRate(b.wins, b.matches) - calculateWinRate(a.wins, a.matches)).slice(0, 3);
+  const bottomMatchups = [...matchups].sort((a, b) => calculateWinRate(b.wins, b.matches) - calculateWinRate(a.wins, a.matches)).slice(0, 6);
+  const topMatchups = [...matchups].sort((a, b) => calculateWinRate(a.wins, a.matches) - calculateWinRate(b.wins, b.matches)).slice(0, 3);
 
-  const bottomMatchups = [...matchups].sort((a, b) => calculateWinRate(a.wins, a.matches) - calculateWinRate(b.wins, b.matches)).slice(0, 3);
+  const frequentTeammates = teammates
+    .filter(teammate => {
+      // Check if this teammate is in the current players list
+      return Object.entries(currentPlayers).some(([playerUsername, playerId]) => 
+        playerId === teammate.info.player_uid.toString()
+      );
+    })
+    .sort((a, b) => b.matches - a.matches);
 
   return (
     <Card>
       <CardHeader className='pb-2'>
         <CardTitle className='text-lg flex items-center justify-between'>
-          {username}
-          <span className='text-sm font-normal'>Rank {lastRank.rank.new_level}</span>
+          {newUsername}
+          <span className='text-sm font-normal'>{rankNames[lastRank.rank.new_level] ?? lastRank.rank.new_level}</span>
         </CardTitle>
         <CardDescription className='text-xs'>ID: {playerId}</CardDescription>
       </CardHeader>
@@ -259,6 +289,19 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
           </div>
         </div>
 
+        {frequentTeammates.length > 0 && (
+          <Section title='Premade Teammates'>
+            <div className='col-span-3 grid grid-cols-2 gap-2'>
+              {frequentTeammates.map(teammate => (
+                <div key={teammate.info.player_uid} className='flex items-center justify-between bg-secondary/50 rounded p-2'>
+                  <span className='text-xs font-medium'>{teammate.info.nick_name}</span>
+                  <span className='text-xs text-muted-foreground'>({teammate.matches})</span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         <Section title='Most Played Heroes (ban if good)'>
           {topHeroes.map(([heroId, heroStats]) => (
             <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} showKDA={true} />
@@ -273,13 +316,13 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
 
         <Section title='Best Matchups (avoid)'>
           {topMatchups.map(matchup => (
-            <HeroStats key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+            <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
           ))}
         </Section>
 
         <Section title='Worst Matchups (play)'>
           {bottomMatchups.map(matchup => (
-            <HeroStats key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+            <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
           ))}
         </Section>
       </CardContent>
@@ -292,6 +335,7 @@ function AppContent() {
   const [tempApiKey, setTempApiKey] = useState("");
   const [players, setPlayers] = useState<PlayerMapping>({});
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const savedKey = localStorage.getItem("openai_api_key");
@@ -331,7 +375,11 @@ function AppContent() {
       }
       return data.players as PlayerMapping;
     },
-    onSuccess: data => setPlayers(data),
+    onSuccess: data => {
+      setPlayers(data);
+      // Update the currentPlayers query data when we get new players
+      queryClient.setQueryData(["currentPlayers"], data);
+    },
   });
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -386,7 +434,15 @@ function AppContent() {
             </CardHeader>
             <CardContent className='grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3'>
               {Object.entries(players).map(([username, playerId]) => (
-                <PlayerCard key={username} username={username} playerId={playerId} />
+                <ErrorBoundary
+                  key={username}
+                  FallbackComponent={PlayerCardErrorFallback}
+                  onReset={() => {
+                    queryClient.invalidateQueries({ queryKey: ["player", playerId] });
+                  }}
+                >
+                  <PlayerCard username={username} playerId={playerId} />
+                </ErrorBoundary>
               ))}
             </CardContent>
           </Card>

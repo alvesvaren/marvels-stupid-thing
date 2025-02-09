@@ -19,6 +19,15 @@ export interface PlayerData {
       total_time_played: number;
     };
   };
+  teammates: Array<{
+    matches: number;
+    win: number;
+    info: {
+      nick_name: string;
+      player_icon: number;
+      player_uid: number;
+    };
+  }>;
   rank_history: Array<{
     match_time_stamp: number;
     rank: {

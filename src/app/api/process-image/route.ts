@@ -31,7 +31,7 @@ export async function POST(request: Request) {
           content: [
             {
               type: 'text',
-              text: 'Extract all player usernames from this Marvel Rivals screenshot. Return them as an array of strings. The usernames are listed on a slanted surface, first their level, followed by their username and an optional title (ignore the title), and there are always 6 usernames in each picture, so always return 6 usernames! Make sure to read their names closely, as they are not always spelled logically.',
+              text: 'Extract all player usernames from this Marvel Rivals screenshot. Return them as an array of strings. The usernames are listed on a slanted surface, first their level, followed by their username and an optional title (ignore the title), and there are always 6 or 12 usernames in each picture, so always return 6 or 12 usernames! Make sure to read their names closely, as they are not always spelled logically.',
             },
             {
               type: 'image_url',
