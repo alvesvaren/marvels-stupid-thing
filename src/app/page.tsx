@@ -11,6 +11,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { PlayerData } from "./api/player/[id]/route";
+import { Pencil } from "lucide-react";
 
 interface PlayerMapping {
   [username: string]: string | null;
@@ -28,7 +29,7 @@ function calculateKDA(kills: number, deaths: number, assists: number): string {
 }
 
 function calculateWinRate(wins: number, matches: number): number {
-  return +((wins / matches) * 100).toFixed(1);
+  return +((wins / (matches || 1)) * 100).toFixed(1);
 }
 
 function getHeroName(heroId: string): string {
@@ -155,15 +156,16 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
         throw new Error("Failed to search player");
       }
       const data = await response.json();
-      return data.playerId as string | null;
+      return { id: data.playerId as string | null, username };
     },
-    onSuccess: newId => {
-      setPlayerId(newId);
-      setIsEditOpen(false);
+    onSuccess: ({ id, username }) => {
       queryClient.setQueryData(["currentPlayers"], {
         ...currentPlayers,
-        [newUsername]: newId,
+        [username]: id,
       });
+      setPlayerId(id);
+      setNewUsername(username);
+      setIsEditOpen(false);
     },
   });
 
@@ -184,39 +186,68 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     enabled: !!playerId,
   });
 
+  const UsernameDialog = () => (
+    <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update Username</DialogTitle>
+          <DialogDescription>Enter the correct username to search for the player.</DialogDescription>
+        </DialogHeader>
+        <form 
+          onSubmit={(e) => {
+            e.preventDefault();
+            const formData = new FormData(e.currentTarget);
+            const username = formData.get('username') as string;
+            if (username) {
+              searchMutation.mutate(username);
+            }
+          }}
+        >
+          <div className='py-4'>
+            <Label htmlFor='username'>Username</Label>
+            <Input 
+              id='username' 
+              name='username'
+              defaultValue={newUsername}
+              className='mt-2' 
+            />
+          </div>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setIsEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button type='submit' disabled={searchMutation.isPending}>
+              {searchMutation.isPending ? "Searching..." : "Search"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (searchMutation.isPending) {
+    return (
+      <Card>
+        <CardContent className='p-6'>
+          <div className='flex flex-col items-center gap-4'>
+            <div className='w-4 h-4 border-2 border-current border-t-transparent animate-spin rounded-full'></div>
+            <div>Searching for player...</div>
+          </div>
+          <UsernameDialog />
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (!playerId) {
     return (
       <Card>
         <CardContent className='p-6'>
           <div className='flex flex-col items-center gap-4'>
-            <div className='text-destructive'>Failed to find player: {username}</div>
+            <div className='text-destructive'>Failed to find player: {newUsername}</div>
             <Button onClick={() => setIsEditOpen(true)}>Update Username</Button>
           </div>
-          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Update Username</DialogTitle>
-                <DialogDescription>Enter the correct username to search for the player.</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                searchMutation.mutate(newUsername);
-              }}>
-                <div className='py-4'>
-                  <Label htmlFor='username'>Username</Label>
-                  <Input id='username' value={newUsername} onChange={e => setNewUsername(e.target.value)} className='mt-2' />
-                </div>
-                <DialogFooter>
-                  <Button type='button' variant='outline' onClick={() => setIsEditOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type='submit' disabled={searchMutation.isPending}>
-                    {searchMutation.isPending ? "Searching..." : "Search"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <UsernameDialog />
         </CardContent>
       </Card>
     );
@@ -226,8 +257,9 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
     return (
       <Card>
         <CardContent className='p-6'>
-          <div className='flex items-center justify-center'>
+          <div className='flex flex-col items-center gap-4'>
             <div className='w-4 h-4 border-2 border-current border-t-transparent animate-spin rounded-full'></div>
+            <div>Loading player data...</div>
           </div>
         </CardContent>
       </Card>
@@ -278,7 +310,15 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
       <Card className="h-full">
         <CardHeader className='pb-2'>
           <CardTitle className='text-lg flex items-center justify-between'>
-            {newUsername}
+            <div className="flex items-center gap-2">
+              {newUsername}
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => {
+                e.preventDefault();
+                setIsEditOpen(true);
+              }}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            </div>
             <span className='text-sm font-normal'>{rankNames[lastRank.rank.new_level] ?? lastRank.rank.new_level}</span>
           </CardTitle>
           <CardDescription className='text-xs'>ID: {playerId}</CardDescription>
@@ -332,6 +372,7 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
             ))}
           </Section>
         </CardContent>
+        <UsernameDialog />
       </Card>
     </a>
   );
