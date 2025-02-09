@@ -5,13 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { heroNames, rankNames } from "@/data/mappings";
+import { heroNames, heroClasses, rankNames } from "@/data/mappings";
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { PlayerData } from "./api/player/[id]/route";
 import { Pencil } from "lucide-react";
+import duelistImg from './role-img/duelist.png';
+import vanguardImg from './role-img/vanguard.png';
+import strategistImg from './role-img/strategist.png';
 
 interface PlayerMapping {
   [username: string]: string | null;
@@ -36,6 +39,10 @@ function getHeroName(heroId: string): string {
   return heroNames[heroId] || `Unknown (${heroId})`;
 }
 
+function getHeroClass(heroId: string): string {
+  return heroClasses[heroId] || 'Unknown';
+}
+
 function WinRateProgress({ wins, matches, className = "", inverted = false }: { wins: number; matches: number; className?: string; inverted?: boolean }) {
   const winRate = calculateWinRate(inverted ? matches - wins : wins, matches);
   const color = winRate >= 60 ? "bg-green-500" : winRate >= 50 ? "bg-blue-500" : "bg-red-500";
@@ -57,15 +64,19 @@ function HeroStats({
   stats,
   showKDA = false,
   inverted = false,
+  heroId,
 }: {
   name: string;
   stats: { matches: number; win: number; kills?: number; deaths?: number; assists?: number };
   showKDA?: boolean;
   inverted?: boolean;
+  heroId: string;
 }) {
   return (
     <div className='flex gap-1 flex-col justify-between'>
-      <div className='font-medium text-xs'>{name}</div>
+      <div className='font-medium text-xs'>
+        <span>{name}</span>
+      </div>
       <WinRateProgress wins={stats.win} matches={stats.matches} inverted={inverted} />
       {showKDA && stats.kills !== undefined && stats.deaths !== undefined && stats.assists !== undefined && (
         <div className='text-xs text-muted-foreground'>{calculateKDA(stats.kills, stats.deaths, stats.assists)}</div>
@@ -134,6 +145,93 @@ function PlayerCardErrorFallback({ error, resetErrorBoundary }: { error: Error; 
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function RoleDistribution({ heroes_ranked }: { heroes_ranked: PlayerData['heroes_ranked'] }) {
+  const roleStats = Object.entries(heroes_ranked).reduce((acc, [heroId, stats]) => {
+    const role = getHeroClass(heroId).toLowerCase();
+    if (!acc[role]) {
+      acc[role] = { matches: 0, wins: 0 };
+    }
+    acc[role].matches += stats.matches;
+    acc[role].wins += stats.win;
+    return acc;
+  }, {} as Record<string, { matches: number, wins: number }>);
+
+  const totalMatches = Object.values(roleStats).reduce((sum, { matches }) => sum + matches, 0);
+
+  const roleImages = {
+    duelist: duelistImg,
+    vanguard: vanguardImg,
+    strategist: strategistImg,
+  };
+
+  const roleColors = {
+    duelist: '#000',
+    vanguard: '#666',
+    strategist: '#999',
+  };
+
+  const roleOrder = ['vanguard', 'duelist', 'strategist'];
+  
+  const sortedRoles = roleOrder.map(role => ({
+    role,
+    percentage: (roleStats[role]?.matches || 0) / totalMatches * 100,
+    matches: roleStats[role]?.matches || 0,
+    winRate: roleStats[role]?.wins ? (roleStats[role].wins / roleStats[role].matches) * 100 : 0
+  }));
+
+  return (
+    <Section title='Role Distribution'>
+      <div className='col-span-3 space-y-2'>
+        <div className='flex items-center gap-2 justify-between'>
+          {sortedRoles.map(({ role, matches, percentage, winRate }) => (
+            <div key={role} className='flex items-center gap-1.5 text-xs'>
+              <img 
+                src={roleImages[role as keyof typeof roleImages]?.src} 
+                alt={role}
+                className="w-4 h-4" 
+              />
+              <div className='text-muted-foreground'>
+                {Math.round(percentage)}% ({matches})
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className='relative h-2 bg-secondary rounded-full overflow-hidden flex'>
+          {sortedRoles.map(({ role, percentage }) => (
+            <div
+              key={role}
+              className='h-full transition-all'
+              style={{
+                width: `${percentage}%`,
+                backgroundColor: roleColors[role as keyof typeof roleColors]
+              }}
+            />
+          ))}
+        </div>
+        <div className='flex items-center justify-between gap-2'>
+          {sortedRoles.map(({ role, winRate }) => (
+            <div key={role} className='flex-1'>
+              <div className='relative h-1.5 bg-secondary rounded-full overflow-hidden'>
+                <div 
+                  className={`h-full transition-all ${
+                    winRate >= 60 ? "bg-green-500" : 
+                    winRate >= 50 ? "bg-blue-500" : 
+                    "bg-red-500"
+                  }`} 
+                  style={{ width: `${Math.min(Math.round(winRate), 100)}%` }} 
+                />
+              </div>
+              <div className='text-[10px] text-muted-foreground mt-0.5 text-center'>
+                {Math.round(winRate)}% WR
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Section>
   );
 }
 
@@ -338,6 +436,8 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
             </div>
           </div>
 
+          <RoleDistribution heroes_ranked={heroes_ranked} />
+
           {frequentTeammates.length > 0 && (
             <Section title='Premade Teammates'>
               <div className='col-span-3 grid grid-cols-2 gap-2'>
@@ -353,25 +453,25 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
 
           <Section title='Most Played Heroes (ban if good)'>
             {topHeroes.map(([heroId, heroStats]) => (
-              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} showKDA={true} />
+              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} showKDA={true} heroId={heroId} />
             ))}
           </Section>
 
           <Section title='Best Heroes (ban)'>
             {bestHeroes.map(([heroId, heroStats]) => (
-              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} />
+              <HeroStats key={heroId} name={getHeroName(heroId)} stats={heroStats} heroId={heroId} />
             ))}
           </Section>
 
           <Section title='Best Matchups (avoid)'>
             {topMatchups.map(matchup => (
-              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} heroId={matchup.hero_id.toString()} />
             ))}
           </Section>
 
           <Section title='Worst Matchups (play)'>
             {bottomMatchups.map(matchup => (
-              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} />
+              <HeroStats inverted key={matchup.hero_id} name={getHeroName(matchup.hero_id.toString())} stats={{ matches: matchup.matches, win: matchup.wins }} heroId={matchup.hero_id.toString()} />
             ))}
           </Section>
         </CardContent>
