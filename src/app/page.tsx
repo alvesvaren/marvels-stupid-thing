@@ -420,7 +420,7 @@ function PlayerCard({ username, playerId: initialPlayerId }: { username: string;
                 <Pencil className="h-4 w-4" />
               </Button>
             </div>
-            <span className='text-sm font-normal'>{rankNames[lastRank.rank.new_level] ?? lastRank.rank.new_level}</span>
+            <span className='text-sm font-normal'>{rankNames[lastRank?.rank.new_level ?? 0] ?? lastRank?.rank.new_level}</span>
           </CardTitle>
           <CardDescription className='text-xs'>ID: {playerId}</CardDescription>
         </CardHeader>

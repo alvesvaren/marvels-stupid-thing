@@ -75,6 +75,7 @@ export const heroClasses: Record<string, string> = {
 };
 
 export const rankNames: Record<number, string> = {
+  0: "Unranked",
   1: "Bronze 3",
   2: "Bronze 2",
   3: "Bronze 1",
